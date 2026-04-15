@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Freight Doc Parser</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0f14;
+    --surface: #151820;
+    --border: #2a2f3d;
+    --accent: #e8ff47;
+    --accent2: #4af0c4;
+    --text: #e2e6f0;
+    --muted: #5a6278;
+    --danger: #ff5c5c;
+    --mono: 'Space Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 20px 40px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .logo-mark {
+    width: 36px; height: 36px;
+    background: var(--accent);
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+    flex-shrink: 0;
+  }
+  header h1 {
+    font-size: 1.1rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  header span {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-left: auto;
+    letter-spacing: 0.05em;
+  }
+
+  main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 400px 1fr;
+    height: calc(100vh - 65px);
+  }
+
+  .left-panel {
+    border-right: 1px solid var(--border);
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    overflow-y: auto;
+  }
+
+  .section-label {
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    letter-spacing: 0.15em;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .drop-zone {
+    border: 1.5px dashed var(--border);
+    border-radius: 4px;
+    padding: 32px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+  .drop-zone:hover, .drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(232,255,71,0.03);
+  }
+  .drop-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+  .drop-icon { font-size: 2rem; margin-bottom: 10px; display: block; }
+  .drop-zone p { font-size: 0.82rem; color: var(--muted); line-height: 1.7; }
+  .drop-zone strong { color: var(--accent); font-family: var(--mono); font-size: 0.7rem; }
+
+  .file-queue { display: flex; flex-direction: column; gap: 6px; }
+  .file-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 9px 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    animation: slideIn 0.2s ease;
+  }
+  .file-item .fname { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-item .fsize { color: var(--muted); flex-shrink: 0; }
+  .file-item .remove-btn {
+    background: none; border: none; color: var(--muted);
+    cursor: pointer; font-size: 0.85rem; padding: 0 2px;
+    line-height: 1; transition: color 0.15s;
+  }
+  .file-item .remove-btn:hover { color: var(--danger); }
+
+  .parse-btn {
+    background: var(--accent);
+    color: #0d0f14;
+    border: none;
+    padding: 13px 24px;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: opacity 0.15s, transform 0.1s;
+    width: 100%;
+  }
+  .parse-btn:hover:not(:disabled) { opacity: 0.88; transform: translateY(-1px); }
+  .parse-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+  .status-bar {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--muted);
+    padding: 4px 0;
+    min-height: 20px;
+  }
+
+  /* ── Toggle: Key Fields / Full ── */
+  .view-toggle {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .toggle-btn {
+    flex: 1;
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 8px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .toggle-btn.active {
+    background: var(--accent);
+    color: #0d0f14;
+    font-weight: 700;
+  }
+
+  /* ── Right Panel ── */
+  .right-panel {
+    padding: 28px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--muted);
+  }
+  .empty-state .big-icon { font-size: 3rem; opacity: 0.25; }
+  .empty-state p { font-family: var(--mono); font-size: 0.72rem; }
+
+  /* ── Result Card ── */
+  .result-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+    animation: fadeUp 0.25s ease;
+  }
+  .result-card.success { border-left: 3px solid var(--accent2); }
+  .result-card.error   { border-left: 3px solid var(--danger); }
+
+  .card-header {
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255,255,255,0.015);
+  }
+  .card-header .filename {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .badge {
+    font-family: var(--mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.08em;
+    padding: 3px 7px;
+    border-radius: 2px;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .badge.success { background: rgba(74,240,196,0.12); color: var(--accent2); }
+  .badge.error   { background: rgba(255,92,92,0.12);  color: var(--danger); }
+  .badge.method  { background: rgba(232,255,71,0.08); color: var(--accent); }
+
+  .card-body { padding: 18px; }
+
+  /* ── Key Fields 三欄大字 ── */
+  .key-fields-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .kf-cell {
+    background: var(--surface);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .kf-label {
+    font-family: var(--mono);
+    font-size: 0.58rem;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .kf-value {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    color: var(--text);
+    word-break: break-all;
+    line-height: 1.5;
+  }
+  .kf-value.big {
+    font-size: 1.15rem;
+    color: var(--accent);
+    font-weight: 700;
+  }
+  .kf-value.null-val { color: var(--muted); font-style: italic; font-size: 0.75rem; }
+
+  .container-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+  .container-tag {
+    background: rgba(232,255,71,0.06);
+    border: 1px solid rgba(232,255,71,0.2);
+    color: var(--accent);
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    padding: 3px 8px;
+    border-radius: 2px;
+  }
+
+  /* ── Full Fields ── */
+  .full-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+  .field-group { display: flex; flex-direction: column; gap: 3px; }
+  .field-group.full { grid-column: 1 / -1; }
+  .field-label {
+    font-family: var(--mono);
+    font-size: 0.57rem;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .field-value { font-family: var(--mono); font-size: 0.78rem; color: var(--text); }
+  .field-value.accent  { color: var(--accent);  font-size: 0.95rem; font-weight: 700; }
+  .field-value.accent2 { color: var(--accent2); }
+  .field-value.null-val { color: var(--muted); font-style: italic; }
+
+  .charge-table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  .charge-table tr { border-bottom: 1px solid var(--border); }
+  .charge-table tr:last-child { border-bottom: none; }
+  .charge-table td { padding: 6px 0; font-family: var(--mono); font-size: 0.7rem; }
+  .charge-table td:last-child { text-align: right; color: var(--accent2); }
+
+  .spinner {
+    display: inline-block; width: 12px; height: 12px;
+    border: 2px solid rgba(232,255,71,0.2);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    vertical-align: middle; margin-right: 6px;
+  }
+
+  @keyframes slideIn { from { opacity:0; transform:translateX(-8px); } to { opacity:1; transform:translateX(0); } }
+  @keyframes fadeUp  { from { opacity:0; transform:translateY(8px);  } to { opacity:1; transform:translateY(0); } }
+  @keyframes spin    { to { transform: rotate(360deg); } }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; height: auto; }
+    .left-panel { border-right: none; border-bottom: 1px solid var(--border); }
+    .key-fields-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-mark"></div>
+  <h1>Freight Doc Parser</h1>
+  <span>LOCAL · OLLAMA · v1.0</span>
+</header>
+
+<main>
+  <!-- ── Left Panel ── -->
+  <div class="left-panel">
+
+    <div>
+      <div class="section-label">Upload</div>
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="fileInput" multiple accept=".pdf,image/*">
+        <span class="drop-icon">📦</span>
+        <p>拖曳或點擊上傳<br>
+          <strong>PDF / JPG / PNG / TIFF</strong><br>
+          批次最多 10 個
+        </p>
+      </div>
+    </div>
+
+    <div id="fileQueueSection" style="display:none">
+      <div class="section-label">Queue (<span id="queueCount">0</span>)</div>
+      <div class="file-queue" id="fileQueue"></div>
+    </div>
+
+    <div>
+      <div class="section-label">Output Mode</div>
+      <div class="view-toggle">
+        <button class="toggle-btn active" id="btnKey" onclick="setMode('key')">Key Fields</button>
+        <button class="toggle-btn" id="btnFull" onclick="setMode('full')">Full Parse</button>
+      </div>
+    </div>
+
+    <div>
+      <button class="parse-btn" id="parseBtn" disabled>▶ Parse</button>
+      <div class="status-bar" id="statusBar"></div>
+    </div>
+
+    <div>
+      <div class="section-label">Endpoints</div>
+      <div style="font-family:var(--mono);font-size:0.65rem;color:var(--muted);line-height:2">
+        POST /api/documents/parse<br>
+        POST /api/documents/parse-batch<br>
+        POST /api/documents/parse/key-fields<br>
+        POST /api/documents/parse-batch/key-fields<br>
+        GET &nbsp;/api/documents/health
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Right Panel ── -->
+  <div class="right-panel" id="resultsPanel">
+    <div class="empty-state" id="emptyState">
+      <span class="big-icon">🗂️</span>
+      <p>解析結果將顯示於此</p>
+    </div>
+  </div>
+</main>
+
+<script>
+
+console.log('JS START');
+
+const API = 'http://127.0.0.1:8000/api/documents';
+let fileList = [];
+let viewMode = 'key';
+
+const dropZone   = document.getElementById('dropZone');
+const fileInput  = document.getElementById('fileInput');
+const fileQueue  = document.getElementById('fileQueue');
+const parseBtn   = document.getElementById('parseBtn');
+const statusBar  = document.getElementById('statusBar');
+const results    = document.getElementById('resultsPanel');
+
+console.log('setMode defined');
+
+window.setMode = function(m) {
+  viewMode = m;
+  document.getElementById('btnKey').classList.toggle('active', m === 'key');
+  document.getElementById('btnFull').classList.toggle('active', m === 'full');
+}
+
+dropZone.addEventListener('dragover', function(e) {
+  e.preventDefault();
+  dropZone.classList.add('drag-over');
+});
+dropZone.addEventListener('dragleave', function() {
+  dropZone.classList.remove('drag-over');
+});
+dropZone.addEventListener('drop', function(e) {
+  e.preventDefault();
+  dropZone.classList.remove('drag-over');
+  addFiles(Array.from(e.dataTransfer.files));
+});
+fileInput.addEventListener('change', function() {
+  addFiles(Array.from(fileInput.files));
+  fileInput.value = '';
+});
+
+function addFiles(files) {
+  files.forEach(function(f) {
+    var exists = fileList.find(function(x) { return x.name === f.name && x.size === f.size; });
+    if (!exists) fileList.push(f);
+  });
+  renderQueue();
+}
+
+function removeFile(i) {
+  fileList.splice(i, 1);
+  renderQueue();
+}
+
+function renderQueue() {
+  fileQueue.innerHTML = '';
+  var sec = document.getElementById('fileQueueSection');
+  if (!fileList.length) {
+    sec.style.display = 'none';
+    parseBtn.disabled = true;
+    return;
+  }
+  sec.style.display = 'block';
+  parseBtn.disabled = false;
+  document.getElementById('queueCount').textContent = fileList.length;
+
+  fileList.forEach(function(f, i) {
+    var el = document.createElement('div');
+    el.className = 'file-item';
+    var kb = (f.size / 1024).toFixed(1);
+    el.innerHTML =
+      '<span class="fname" title="' + f.name + '">' + f.name + '</span>' +
+      '<span class="fsize">' + kb + 'KB</span>' +
+      '<button class="remove-btn" onclick="removeFile(' + i + ')">✕</button>';
+    fileQueue.appendChild(el);
+  });
+}
+
+parseBtn.addEventListener('click', async function() {
+  if (!fileList.length) return;
+  parseBtn.disabled = true;
+  statusBar.innerHTML = '<span class="spinner"></span>解析中 (' + fileList.length + ' 個文件)...';
+  results.innerHTML = '';
+
+  var endpoint = viewMode === 'key'
+    ? API + '/parse-batch/key-fields'
+    : API + '/parse-batch';
+
+  try {
+    var form = new FormData();
+    fileList.forEach(function(f) { form.append('files', f); });
+
+    var resp = await fetch(endpoint, { method: 'POST', body: form });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+
+    var data = await resp.json();
+    data.forEach(function(item) {
+      if (viewMode === 'key') renderKeyCard(item);
+      else renderFullCard(item);
+    });
+    statusBar.innerHTML = '✅ 完成，共 ' + data.length + ' 份';
+
+  } catch(err) {
+    statusBar.innerHTML = '❌ ' + err.message;
+    if (err.message.indexOf('fetch') > -1 || err.message.indexOf('NetworkError') > -1) {
+      statusBar.innerHTML = '⚠️ 後端未啟動，顯示 Demo';
+      demoResults().forEach(function(item) { renderKeyCard(item); });
+    }
+  } finally {
+    parseBtn.disabled = false;
+  }
+});
+
+
+function renderKeyCard(item) {
+  var kf = item.key_fields || (item.data ? {
+    filename: item.filename,
+    mbl_or_invoice_no: item.data.mbl_no || item.data.invoice_no,
+    container_nos: item.data.container_nos || [],
+    total_amount: item.data.total_amount,
+    currency: item.data.currency
+  } : null);
+
+  var card = document.createElement('div');
+  card.className = 'result-card ' + (item.success ? 'success' : 'error');
+
+  if (!item.success || !kf) {
+    card.innerHTML =
+      '<div class="card-header">' +
+        '<span class="filename">' + item.filename + '</span>' +
+        '<span class="badge error">ERROR</span>' +
+      '</div>' +
+      '<div class="card-body" style="color:var(--danger);font-family:var(--mono);font-size:0.78rem">' +
+        (item.error || 'Unknown error') +
+      '</div>';
+    results.appendChild(card);
+    return;
+  }
+
+  var mbl    = kf.mbl_or_invoice_no || null;
+  var ctns   = kf.container_nos || [];
+  var amount = kf.total_amount
+    ? (kf.currency || 'USD') + ' ' + Number(kf.total_amount).toLocaleString('en-US', {minimumFractionDigits:2})
+    : null;
+
+  var ctnHtml = ctns.length
+    ? '<div class="container-tags">' + ctns.map(function(c) { return '<span class="container-tag">' + c + '</span>'; }).join('') + '</div>'
+    : '<div class="kf-value null-val">not found</div>';
+
+  card.innerHTML =
+    '<div class="card-header">' +
+      '<span class="filename" title="' + item.filename + '">' + item.filename + '</span>' +
+      '<span class="badge success">OK</span>' +
+    '</div>' +
+    '<div class="card-body">' +
+      '<div class="key-fields-grid">' +
+        '<div class="kf-cell">' +
+          '<div class="kf-label">① MBL / Invoice No.</div>' +
+          (mbl ? '<div class="kf-value">' + mbl + '</div>' : '<div class="kf-value null-val">not found</div>') +
+        '</div>' +
+        '<div class="kf-cell">' +
+          '<div class="kf-label">② Container No.</div>' +
+          ctnHtml +
+        '</div>' +
+        '<div class="kf-cell">' +
+          '<div class="kf-label">③ Total Amount</div>' +
+          (amount ? '<div class="kf-value big">' + amount + '</div>' : '<div class="kf-value null-val">—</div>') +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+  results.appendChild(card);
+}
+
+function renderFullCard(item) {
+  var d = item.data;
+  var card = document.createElement('div');
+  card.className = 'result-card ' + (item.success ? 'success' : 'error');
+
+  if (!item.success || !d) {
+    card.innerHTML =
+      '<div class="card-header">' +
+        '<span class="filename">' + item.filename + '</span>' +
+        '<span class="badge error">ERROR</span>' +
+      '</div>' +
+      '<div class="card-body" style="color:var(--danger);font-family:var(--mono);font-size:0.78rem">' + item.error + '</div>';
+    results.appendChild(card);
+    return;
+  }
+
+  function v(val, cls) {
+    return val
+      ? '<span class="field-value ' + (cls||'') + '">' + val + '</span>'
+      : '<span class="field-value null-val">—</span>';
+  }
+
+  var ctns = d.container_nos && d.container_nos.length
+    ? '<div class="container-tags">' + d.container_nos.map(function(c) { return '<span class="container-tag">' + c + '</span>'; }).join('') + '</div>'
+    : '<span class="field-value null-val">—</span>';
+
+  var amount = d.total_amount
+    ? (d.currency||'USD') + ' ' + Number(d.total_amount).toLocaleString('en-US',{minimumFractionDigits:2})
+    : null;
+
+  var charges = d.raw_charges && d.raw_charges.length
+    ? '<table class="charge-table">' + d.raw_charges.map(function(c) { return '<tr><td>' + (c.name||'') + '</td><td>' + (c.amount||'') + '</td></tr>'; }).join('') + '</table>'
+    : '';
+
+  card.innerHTML =
+    '<div class="card-header">' +
+      '<span class="filename" title="' + item.filename + '">' + item.filename + '</span>' +
+      '<span class="badge method">' + (d.extraction_method||'') + '</span>' +
+      '<span class="badge success">OK</span>' +
+    '</div>' +
+    '<div class="card-body">' +
+      '<div class="full-grid">' +
+        '<div class="field-group"><div class="field-label">Document Type</div>' + v(d.document_type && d.document_type.replace(/_/g,' ').toUpperCase(), 'accent2') + '</div>' +
+        '<div class="field-group"><div class="field-label">Total Amount</div>' + v(amount, 'accent') + '</div>' +
+        '<div class="field-group"><div class="field-label">MBL No.</div>' + v(d.mbl_no) + '</div>' +
+        '<div class="field-group"><div class="field-label">Invoice No.</div>' + v(d.invoice_no) + '</div>' +
+        '<div class="field-group"><div class="field-label">HBL No.</div>' + v(d.hbl_no) + '</div>' +
+        '<div class="field-group"><div class="field-label">ETA</div>' + v(d.eta) + '</div>' +
+        '<div class="field-group full"><div class="field-label">Container No(s).</div>' + ctns + '</div>' +
+        '<div class="field-group"><div class="field-label">Port of Loading</div>' + v(d.port_of_loading) + '</div>' +
+        '<div class="field-group"><div class="field-label">Port of Discharge</div>' + v(d.port_of_discharge) + '</div>' +
+        '<div class="field-group"><div class="field-label">Vessel / Voyage</div>' + v(d.vessel_voyage) + '</div>' +
+        '<div class="field-group"><div class="field-label">Commodity</div>' + v(d.commodity) + '</div>' +
+        (charges ? '<div class="field-group full"><div class="field-label">Charges</div>' + charges + '</div>' : '') +
+      '</div>' +
+    '</div>';
+
+  results.appendChild(card);
+}
+
+function demoResults() {
+  return [
+    { success:true, filename:'NV15357_CHN.pdf', key_fields:{
+        mbl_or_invoice_no:'YMJAW490498450',
+        container_nos:['FFAU1289797'],
+        total_amount:'785.00', currency:'USD'
+    }},
+    { success:true, filename:'ONEYSGNFDB899300_draft.pdf', key_fields:{
+        mbl_or_invoice_no:'ONEYSGNFDB899300',
+        container_nos:['DRYU9469244','HPPU4903520','SEGU5508523'],
+        total_amount:null, currency:null
+    }},
+    { success:true, filename:'ZAW_79_W_ZIMUHCM80604518.pdf', key_fields:{
+        mbl_or_invoice_no:'ZIMUHCM80604518',
+        container_nos:['TIIU4868140'],
+        total_amount:'2759.79', currency:'USD'
+    }}
+  ];
+}
+
+</script>
+</body>
+</html>
