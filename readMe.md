@@ -6,7 +6,7 @@ Upload PDFs (Invoice, Sea Waybill, Notice of Arrival) and automatically extract 
 ---
 ## Demo
 
-<img src="https://raw.githubusercontent.com/yourusername/freight-doc-parser/main/assets/demo.gif" 
+<img src="https://raw.githubusercontent.com/Yneq/freight-doc-parser/main/assets/demo.gif" 
      width="700" alt="Demo GIF"/>
 
 ## Features
