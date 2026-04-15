@@ -6,7 +6,7 @@ Upload PDFs (Invoice, Sea Waybill, Notice of Arrival) and automatically extract 
 ---
 ## Demo
 
-<img src="assets/demo.gif" width="800"/>
+![Demo](assets/demo.gif)
 
 
 ## Features
