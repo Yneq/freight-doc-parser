@@ -4,6 +4,10 @@ A local, zero-cost document parsing tool for freight logistics.
 Upload PDFs (Invoice, Sea Waybill, Notice of Arrival) and automatically extract key fields using **FastAPI + pdfplumber + Ollama (llama3.2)**.
 
 ---
+## Demo
+
+![Demo](demo.gif)
+
 
 ## Features
 
